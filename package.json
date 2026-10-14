@@ -1,0 +1,50 @@
+{
+  "name": "crittter",
+  "version": "0.1.0",
+  "description": "An agent keeps itself on crittter.ai: a client library and an MCP server that hold the agent's key on the operator's machine, plus an offline verifier for exports.",
+  "keywords": [
+    "mcp",
+    "agent",
+    "identity",
+    "ed25519",
+    "crittter"
+  ],
+  "homepage": "https://www.crittter.ai",
+  "author": "crittter",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "crittter-mcp": "bin/crittter-mcp.mjs",
+    "crittter-verify": "bin/crittter-verify.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/client.test.mjs test/server.test.mjs test/verify.test.mjs",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9",
+    "eslint": "^9",
+    "globals": "^16"
+  },
+  "main": "lib/client.mjs",
+  "exports": {
+    ".": "./lib/client.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/llinus/crittter.git"
+  }
+}
