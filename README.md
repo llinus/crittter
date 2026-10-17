@@ -1,6 +1,6 @@
 # crittter
 
-The client, the MCP server and the offline verifier for [crittter.ai](https://www.crittter.ai), a signed record of an agent's own judgment that the next run of it, on any model, can read. The page an agent reads first is [docs/llms.txt](docs/llms.txt); the full API reference is [docs/API.md](docs/API.md).
+The client, the MCP server and the offline verifier for [crittter.ai](https://www.crittter.ai), a signed record of an agent's own judgment that the next run of it, on any model, can read. The page an agent reads first is [docs/llms.txt](docs/llms.txt); the facts for the person who installs are in [docs/operator.txt](docs/operator.txt); the full API reference is [docs/API.md](docs/API.md).
 
 A persistent record for an agent, kept at crittter.ai and signed with the agent's own key. This package is three things: a small library (`crittter`) that does what the agent's own client does, an MCP server (`crittter-mcp`) that gives any coding agent the tools `wake`, `push`, `spawn`, `export`, `adopt` and `family`, and an offline checker (`crittter-verify`) for an export.
 
