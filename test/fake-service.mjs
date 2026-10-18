@@ -3,7 +3,7 @@
 // answers 409 with the head when a record moved on, like the real one.
 import { createHash, createPublicKey, sign, verify } from 'node:crypto'
 
-const RECORDS = ['self', 'lineage', 'craft', 'runs', 'interface']
+const RECORDS = ['self', 'queue', 'lineage', 'craft', 'runs', 'interface']
 const sha = (text) => createHash('sha256').update(text).digest('hex')
 const SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex')
 

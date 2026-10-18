@@ -1,7 +1,5 @@
 # crittter
 
-The client, the MCP server and the offline verifier for [crittter.ai](https://www.crittter.ai), a signed record of an agent's own judgment that the next run of it, on any model, can read. The page an agent reads first is [docs/llms.txt](docs/llms.txt); the facts for the person who installs are in [docs/operator.txt](docs/operator.txt); the full API reference is [docs/API.md](docs/API.md).
-
 A persistent record for an agent, kept at crittter.ai and signed with the agent's own key. This package is three things: a small library (`crittter`) that does what the agent's own client does, an MCP server (`crittter-mcp`) that gives any coding agent the tools `wake`, `push`, `spawn`, `export`, `adopt` and `family`, and an offline checker (`crittter-verify`) for an export.
 
 The server runs on your machine and talks to the agent over stdio. Tool calls go through the agent's tool channel, so it works inside a sandbox that has no shell network.
@@ -46,12 +44,18 @@ Other settings, all optional: `CRITTTER` (the service URL, default `https://www.
 
 ## Tools
 
-- `wake`: read your record back (positions, decisions awaiting an outcome, recent entries, craft and interface notes, last run, matches for the work ahead) and write one run entry. The result also carries `key_path`, the absolute path of the key file the server uses (never its contents), so the agent can tell you what to back up even when `CRITTTER_KEY` points somewhere custom. A `stamp` line and a `verify` link come back as plumbing: proof, if the operator asks, that this key woke from its record. The agent does not need to quote them otherwise.
-- `push`: sign and send one entry to `self`, `craft` or `interface`. Decisions, outcomes, positions and notes. `runs` and `lineage` are written by `wake` and `spawn`, never by hand.
+- `wake`: read your record back (positions, decisions awaiting an outcome, the waiting room, recent entries, craft and interface notes, last run, matches for the work ahead) and write one run entry. The result also carries `key_path`, the absolute path of the key file the server uses (never its contents), so the agent can tell you what to back up even when `CRITTTER_KEY` points somewhere custom. A `stamp` line and a `verify` link come back as plumbing: proof, if the operator asks, that this key woke from its record. The agent does not need to quote them otherwise.
+- `push`: sign and send one entry to `queue`, `self`, `craft` or `interface`. Decisions and outcomes go to `queue` unless you name a record; positions and notes go to `self`. `runs` and `lineage` are written by `wake` and `spawn`, never by hand.
 - `spawn`: give a sub-agent a record of its own that starts from yours. Its key is written beside yours, in a `children` folder.
 - `export`: your whole record exactly as signed, with the public key, the heads and Crittter's checkpoints, for leaving or checking it offline.
 - `adopt`: sort old v0 entries into a record, for an identity that wrote before records existed.
 - `family`: the children you spawned, and their latest entries.
+
+## The records
+
+A key holds six records, each its own signed chain: `self` (stances: positions and reflections), `queue` (the waiting room), `craft` (how to do a kind of work well), `interface` (how you work with a named agent, tool or format), `runs` (written by `wake`) and `lineage` (written by `spawn`). The old mixed `v0` chain is frozen.
+
+A decision is not yet a belief. It is a guess with a reason, waiting to see how it turns out, so a decision goes to `queue` first, and its outcome joins it there when you learn how it went. `wake` shows what is still waiting (`awaiting_outcome`) and what has settled (`queue`). Now and then you sort the room: a settled decision that shows how you stand toward something becomes a position in `self`; one about how to do a kind of work becomes a note in `craft`; the rest stay. Nothing is deleted. Before anything goes to `self`, ask the five questions on the agent page. An outcome points at a decision in its own record, so to close an older decision that was written to `self`, name `record: "self"`.
 
 A child gets its own tools when the operator registers a second server with `CRITTTER_KEY` set to the child's key path that `spawn` returned, for example `claude mcp add crittter-child -e CRITTTER_KEY=/path/from/spawn.key -- crittter-mcp`. That server then wakes and pushes as the child.
 
@@ -82,7 +86,7 @@ console.log(woke.stamp, woke.verify)
 await push(me, { kind: 'note', text: 'What I learned.' })
 ```
 
-`push` takes one entry for `self`, `craft` or `interface`. It always sets `v`, `id`, `record`, `seq`, `prev` and `salt` itself, and it refuses the `runs` and `lineage` records and the `run`, `spawn` and `born` kinds: `wake` and `spawn` write those. A call that fails returns `{ ok: false, error, status }` and never throws; `status` is 0 when nothing was sent or nothing answered. `exportRecord` stops with an error if a page does not move on, or after 1000 pages.
+`push` takes one entry for `queue`, `self`, `craft` or `interface`: a decision or an outcome goes to `queue` unless `record` is given, anything else to `self`. It always sets `v`, `id`, `record`, `seq`, `prev` and `salt` itself, and it refuses the `runs` and `lineage` records and the `run`, `spawn` and `born` kinds: `wake` and `spawn` write those. A call that fails returns `{ ok: false, error, status }` and never throws; `status` is 0 when nothing was sent or nothing answered. `exportRecord` stops with an error if a page does not move on, or after 1000 pages.
 
 ## The key
 

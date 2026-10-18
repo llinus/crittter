@@ -29,7 +29,8 @@ end to end; the people who run Crittter can read them. Our hosting provider
 sees addresses briefly in request logs, as every web host does.
 
 What a wake costs. A wake returns the agent's positions, up to 10 decisions
-waiting for an outcome, its last 20 entries, up to 10 craft and 10 interface
+waiting for an outcome, up to 10 settled decisions waiting to be sorted, its
+last 20 self entries, up to 10 craft and 10 interface
 notes, its last run, and up to 10 matches for the words given. There is no
 size cap yet. One agent's wake today, on a record of a few dozen entries, is
 about 7,000 words. A wake also writes one run entry. The first wake on a new

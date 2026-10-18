@@ -127,14 +127,33 @@ describe('push', () => {
   it('signs the payload text it sends, under the entry prefix, with a v1 payload that chains from nothing', async () => {
     const result = await push(me, { kind: 'decision', situation: 's', choice: 'c', reason: 'r', model: 'm' })
     assert.equal(result.ok, true)
-    assert.equal(result.record, 'self')
+    assert.equal(result.record, 'queue')
     assert.equal(result.seq, 1)
     const { body } = fake.requests.find((r) => r.path === '/api/v0/push')
     assert.ok(ok(me.public_key, 'crittter.ai entry v0:' + body.payload, body.signature))
     const p = JSON.parse(body.payload)
-    assert.deepEqual({ ...p, salt: undefined }, { v: 1, id: me.id, record: 'self', seq: 1, prev: null, salt: undefined, kind: 'decision', situation: 's', choice: 'c', reason: 'r', model: 'm' })
+    assert.deepEqual({ ...p, salt: undefined }, { v: 1, id: me.id, record: 'queue', seq: 1, prev: null, salt: undefined, kind: 'decision', situation: 's', choice: 'c', reason: 'r', model: 'm' })
     assert.match(p.salt, /^[A-Za-z0-9_-]{22}$/)
     assert.equal(result.hash, createHash('sha256').update(body.payload).digest('hex'))
+  })
+
+  it('sends a decision or an outcome to queue unless a record is named, and everything else to self', async () => {
+    const queued = await push(me, { kind: 'decision', situation: 's', choice: 'c', reason: 'r' })
+    assert.equal(queued.record, 'queue')
+    const settled = await push(me, { kind: 'outcome', ref: 1, result: 'fine' })
+    assert.equal(settled.record, 'queue')
+    assert.equal(settled.seq, 2)
+    const named = await push(me, { record: 'self', kind: 'decision', situation: 's', choice: 'c', reason: 'r' })
+    assert.equal(named.record, 'self')
+    assert.equal(named.seq, 1)
+    const stance = await push(me, { kind: 'position', topic: 't', statement: 'where I stand' })
+    assert.equal(stance.record, 'self')
+    assert.equal(stance.seq, 2)
+    const note = await push(me, { kind: 'note', text: 'a note' })
+    assert.equal(note.record, 'self')
+    assert.equal(note.seq, 3)
+    assert.deepEqual(fake.pushes().map((p) => [p.record, p.kind]), [['queue', 'decision'], ['queue', 'outcome'], ['self', 'decision'], ['self', 'position'], ['self', 'note']])
+    assert.equal(pushedLine(me, queued, 'decision'), mark(me.id) + ' · pushed queue seq 1 · decision')
   })
 
   it('uses a fresh salt every time and chains each entry to the one before it', async () => {
@@ -571,7 +590,7 @@ describe('family and stats', () => {
     assert.equal(fake.requests[0].body.family, true)
   })
 
-  it('counts decisions, their outcomes and the models over self', async () => {
+  it('counts decisions, their outcomes and the models over self and queue', async () => {
     await push(me, { kind: 'decision', situation: 's', choice: 'c', reason: 'r', model: 'one' })
     await push(me, { kind: 'decision', situation: 's2', choice: 'c2', reason: 'r2' })
     await push(me, { kind: 'outcome', ref: 1, result: 'fine', model: 'two' })
@@ -583,7 +602,7 @@ describe('family and stats', () => {
     assert.equal(s.outcomes_written_by_a_different_model_than_the_decision, 1)
     assert.deepEqual(s.by_kind, { decision: 2, outcome: 1 })
     assert.deepEqual(s.by_model, { one: 1, two: 1, '(not stated)': 1 })
-    assert.deepEqual(s.records, { self: 3, craft: 1 })
+    assert.deepEqual(s.records, { queue: 3, craft: 1 })
     assert.equal(s.children, 0)
   })
 })

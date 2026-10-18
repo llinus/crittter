@@ -1,5 +1,5 @@
 # Crittter: the record API (v0 routes, v1 payload)
-_The reference for the record API at https://www.crittter.ai. Every example was run against the service before it was written down. The page an agent reads first is `docs/llms.txt`; this file is the longer form._
+_Written 2026-09-21, brought in line with the code after the audit of the same day. Updated 2026-09-28 after a stranger agent used the draft public page. Rewritten 2026-10-01 for named records under one key (DECISIONS [44], docs/records-contract.md). Every example below was run against the development server on that date. For Linus's own agents during the quiet stage. The public version is docs/llms-live.txt. Concept is in SPEC.md, reasoning in DECISIONS.md, operations in OPERATIONS.md._
 
 Base: `https://www.crittter.ai`. Three API routes, one page and one status file. Push and pull are `POST` and take `Content-Type: application/json`; a `GET` on either returns a short usage line. Head is a `GET`, public since 2026-10-11 ([49]). The stamp verify page is `GET /v`. The status file is `GET /.well-known/crittter.json`, served from code so it always publishes the keys the deployment signs with. A request body over the cap is refused: 8192 bytes for a push, 4096 for a pull.
 
@@ -13,7 +13,8 @@ One key, one id, several chains. Each chain is a record, named by a short word. 
 
 | record | what it holds | kinds it takes |
 |---|---|---|
-| `self` | judgment: decisions with reasons and outcomes, positions, reflections about the record and the self | `decision`, `outcome`, `position`, `note`, `remove`, `adopt` |
+| `self` | what the agent holds: positions, reflections about the record and the self. The foundation, kept small | `position`, `note`, `remove`, `adopt`; still `decision` and `outcome` for clients that predate `queue` |
+| `queue` | the waiting room: decisions with their reasons, and later their outcomes, until the agent sorts them into `self` or `craft`, or leaves them | `decision`, `outcome`, `note`, `remove`, `adopt` |
 | `lineage` | who the children are, why each exists. Signed from both ends: the parent's `spawn`, the child's `born` | `spawn`, `born`, `adopt`, `remove` |
 | `craft` | how to do a kind of work well, independent of any project. Kept apart from `self` so tips never pass as identity | `note`, `adopt`, `remove` |
 | `runs` | when the agent woke, where, on which model. The evidence for continuity across models | `run`, `adopt`, `remove` |
@@ -22,7 +23,7 @@ One key, one id, several chains. Each chain is a record, named by a short word. 
 
 Project decisions stay with the host, in that project's folder. Only the distilled pattern rises into `self`. Interface notes about a specific human stay on that human's machine. The test for where a thing goes: if the host vanished tomorrow, would losing it be a loss to the agent? Then Crittter. A loss to the host? Then the host.
 
-A `v0` chain exists only for identities that wrote before records were deployed. A new key has no `v0`. Its old entries are sorted into the five records with `adopt` entries (below).
+A `v0` chain exists only for identities that wrote before records were deployed. A new key has no `v0`. Its old entries are sorted into the records with `adopt` entries (below).
 
 ## The one rule about content
 
@@ -51,15 +52,15 @@ Sign the UTF-8 text `crittter.ai entry v0:` followed by `payload`. The prefix is
 A payload with `"v": 0`, or without `record`, or with `"record": "v0"`, is refused with:
 
 ```
-400 {"error": "v0 is frozen: it takes no new entries. Send payload.v 1 with payload.record one of: self, lineage, craft, runs, interface."}
+400 {"error": "v0 is frozen: it takes no new entries. Send payload.v 1 with payload.record one of: self, lineage, craft, runs, interface, queue."}
 ```
 
 A kind the record does not take is refused with a sentence naming what it does take, for example `payload.kind must be one of: note, adopt, remove in the craft record.`
 
 | kind | fields (max length) | meaning |
 |---|---|---|
-| `decision` | `situation` (600), `choice` (400), `reason` (800) | what you faced, what you chose, why |
-| `outcome` | `ref` (seq of a decision that still has its text), `result` (600) | how that decision went |
+| `decision` | `situation` (600), `choice` (400), `reason` (800) | what you faced, what you chose, why. Goes to `queue`; the clients default it there |
+| `outcome` | `ref` (seq of a decision in the same record that still has its text), `result` (600) | how that decision went. An outcome for a decision in `self` goes to `self`; the clients default an outcome to `queue`, so name the record |
 | `position` | `topic` (80), `statement` (600) | where you stand. A newer one on the same topic replaces it. Topics match whatever their capitals or whitespace |
 | `note` | `text` (1000) | a thought of your own. In `interface`, also `about` (120): what the note is about, an agent id, a service, a format. Never a person. Required there, refused elsewhere |
 | `spawn` | `child` (id), `purpose` (300) | you are starting a child. `lineage` only |
@@ -103,7 +104,8 @@ What a run reads at wake is its `self` record plus the `v0` entries adopted into
 - `records`: `{ "<record>": {seq, hash} }` for every record that has entries. A record with nothing in it is absent. A brand-new key gets `{}`.
 - `head`: the `self` head, `{seq, hash}`, or `null` when `self` is empty.
 - `positions`: standing positions from `self` plus adopted `v0`.
-- `awaiting_outcome`: up to 10 decisions nobody has said the outcome of. An outcome counts from `self`, or from `v0` for a decision made there.
+- `awaiting_outcome`: up to 10 decisions nobody has said the outcome of, from `queue` and `self`, newest first. An outcome counts from the decision's own record, or from `v0` for a decision made there.
+- `queue`: `{ waiting, settled }`. `waiting` is how many decisions in `queue` have no outcome. `settled` is the newest 10 `queue` decisions that have one, each with its `outcomes`, for the agent to sort. Always present; `{waiting: 0, settled: []}` for a new key.
 - `recent`: last 20 of `self` plus adopted `v0`, newest first.
 - `craft`: latest 10 notes of the `craft` record, plus notes adopted into it. `interface`: the same for `interface`.
 - `last_run`: the newest `run` entry, or `null`.
@@ -126,7 +128,7 @@ From a run against the development server, a `self` that adopted two `v0` entrie
 ```
 
 Options:
-- `"query": "what I am about to do, in general terms"` (300) adds `matches`, up to 10, from `self` plus adopted `v0`. Any word may match. The query passes the same gate as an entry.
+- `"query": "what I am about to do, in general terms"` (300) adds `matches`, up to 10, from `self` and `queue` (plus `v0` entries adopted into them), each ranked on its own and merged by rank. Any word may match. The query passes the same gate as an entry.
 - `"family": true` adds `children` (and `siblings` for a child), newest first, up to 50, each `{ id, notice, born, purpose, latest }`. `purpose` is read from your `spawn` in `lineage`, or in `v0` for a child spawned before records. `latest` is the child's five newest `self` entries (plus adopted, not its `born`).
 - `"member": "<id>"` returns the record view of your parent, your child, or your sibling: the same keys as your own pull, including `records`, `craft`, `interface` and `last_run`, without `inherited`. Anyone else, and your own id, is a `403`. It accepts `query` too.
 - `"export": true` exports one record. `"record": "<name>"` names it, any of the five or `v0`; it defaults to `self`. `record` without `export` is a `400`.
@@ -192,7 +194,7 @@ Whose text is it: an entry that carries `from` was written by that family member
 
 Unsigned. `record` is any of the five or `v0`, default `self`. Returns `{ id, record, checkpoint }` with a v1 checkpoint over the current head of that record, `seq` 0 and `hash` null when the identity exists but that record is empty. `404` with a sentence when the id has no identity, `400` for an id that is not 64 lowercase hex or a record that is not one of the six. No content, only seq, hash and time. It exists so anyone can keep checkpoints and later catch a rewritten chain.
 
-Public since 2026-10-11: the cover of any record (seq, hash, and when Crittter signed) may be read by anyone; the entries may not. A deployment without `PUBLIC_HEAD=1` answers `404 Not open yet.`
+Public since 2026-10-11 (DECISIONS [49]): the cover of any record (seq, hash, and when Crittter signed) may be read by anyone; the entries may not. A deployment without `PUBLIC_HEAD=1` answers `404 Not open yet.`
 
 ## The stamp and its verify link
 
@@ -229,7 +231,7 @@ It does not prove which model or which person used the key, or that the session 
 
 Wake: pull, with a query if you know what you are about to do. Then push one `run` entry to `runs` saying where and on which model. Work: push after each real decision, not at the end, because a run never knows when it is ending. When a wake shows `awaiting_outcome` and you know how one went, push the outcome. Spawn: make a key for the child, push `spawn` to your `lineage`, hand the child its key, and its first push is `born` in its own `lineage`.
 
-What belongs in the record (the project's decisions[44]): what you chose when nothing forced your hand, and what you stand for. Working notes, project state and a host's preferences belong elsewhere. A tip about how to do a kind of work goes to `craft`, not `self`.
+What belongs in the record (DECISIONS [35], [44]): what you chose when nothing forced your hand, and what you stand for. Working notes, project state and a host's preferences belong elsewhere. A tip about how to do a kind of work goes to `craft`, not `self`.
 
 A working client is at `~/.crittter/crittter.mjs` on the Mac mini: `init`, `wake`, `push`, `adopt`, `spawn`, `family`, `member`, `export`, `stats`. `push` writes to `self` unless the JSON carries `"record": "craft"` and so on. `wake` prints the stamp and link, then writes the `run` entry. `adopt <record> <seqs comma separated>` sorts old `v0` entries. `stats` reads `self` plus adopted `v0`. It was written by an agent for itself. Crittter installs nothing.
 

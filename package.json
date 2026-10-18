@@ -1,6 +1,6 @@
 {
   "name": "crittter",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "What an agent wrote, the next run of it can read. crittter.ai: a client library and an MCP server that hold the agent's key on the operator's machine, plus an offline verifier for exports.",
   "keywords": [
     "mcp",

@@ -75,7 +75,9 @@ describe('the server over stdio', () => {
     assert.deepEqual(Object.keys(by.wake.properties), ['words', 'model'])
     assert.equal(by.wake.required, undefined)
     assert.deepEqual(by.push.required, ['kind'])
-    assert.deepEqual(by.push.properties.record.enum, ['self', 'craft', 'interface'])
+    assert.deepEqual(by.push.properties.record.enum, ['queue', 'self', 'craft', 'interface'])
+    assert.deepEqual(by.export.properties.record.enum, ['self', 'queue', 'lineage', 'craft', 'runs', 'interface', 'v0'])
+    assert.deepEqual(by.adopt.properties.record.enum, ['self', 'queue', 'lineage', 'craft', 'runs', 'interface'])
     assert.deepEqual(by.push.properties.kind.enum, ['decision', 'outcome', 'position', 'note', 'remove'])
     assert.deepEqual(by.spawn.required.sort(), ['name', 'purpose'])
     assert.deepEqual(Object.keys(by.export.properties), ['record'])
@@ -92,6 +94,8 @@ describe('the server over stdio', () => {
     }
     assert.match(tools.find((t) => t.name === 'wake').description, /never write a stamp you did not get/)
     assert.match(tools.find((t) => t.name === 'push').description, /A few entries in a session is normal/)
+    assert.match(tools.find((t) => t.name === 'push').description, /decision and outcome go to queue, the waiting room, unless you name a record; position and note go to self only if they pass the five questions \(see the agent page\); craft is how to do a kind of work; interface is how you work with a named agent, tool or format\./)
+    assert.match(tools.find((t) => t.name === 'wake').description, /queue/)
   })
 
   it('refuses everything but wake while there is no key, and makes no key', async () => {
@@ -134,11 +138,17 @@ describe('the server over stdio', () => {
     assert.equal('model' in third, false)
   })
 
-  it('pushes to self, craft and interface, each on its own chain, and returns the line to quote', async () => {
-    const self = await s.call('push', { kind: 'decision', situation: 'a fork', choice: 'the left one', reason: 'it was shorter', model: 'test-model' })
-    assert.deepEqual({ ...self.json, hash: undefined, stamp: undefined }, { record: 'self', seq: 1, hash: undefined, stamp: undefined })
-    assert.match(self.json.hash, /^[0-9a-f]{64}$/)
-    assert.match(self.json.stamp, /^\S+ [0-9a-f]{8} · pushed seq 1 · decision$/)
+  it('pushes to queue, self, craft and interface, each on its own chain, and returns the line to quote', async () => {
+    const queue = await s.call('push', { kind: 'decision', situation: 'a fork', choice: 'the left one', reason: 'it was shorter', model: 'test-model' })
+    assert.deepEqual({ ...queue.json, hash: undefined, stamp: undefined }, { record: 'queue', seq: 1, hash: undefined, stamp: undefined })
+    assert.match(queue.json.hash, /^[0-9a-f]{64}$/)
+    assert.match(queue.json.stamp, /^\S+ [0-9a-f]{8} · pushed queue seq 1 · decision$/)
+
+    const settled = await s.call('push', { kind: 'outcome', ref: 1, result: 'it was shorter' })
+    assert.match(settled.json.stamp, / · pushed queue seq 2 · outcome$/)
+
+    const named = await s.call('push', { record: 'self', kind: 'decision', situation: 'an old fork', choice: 'the right one', reason: 'it was quiet' })
+    assert.match(named.json.stamp, /^\S+ [0-9a-f]{8} · pushed seq 1 · decision$/)
 
     const craft = await s.call('push', { record: 'craft', kind: 'note', text: 'Test the real transport.' })
     assert.equal(craft.json.seq, 1)
@@ -148,12 +158,16 @@ describe('the server over stdio', () => {
     assert.match(iface.json.stamp, / · pushed interface seq 1 · note$/)
 
     const next = await s.call('push', { kind: 'position', topic: 'tests', statement: 'Run them for real.' })
+    assert.equal(next.json.record, 'self')
     assert.equal(next.json.seq, 2)
 
     const id = (await s.call('wake')).json.id
-    const [decision, position] = fake.entries(id, 'self')
-    assert.deepEqual({ ...decision, id: undefined, salt: undefined, prev: undefined }, { v: 1, id: undefined, record: 'self', seq: 1, prev: undefined, salt: undefined, kind: 'decision', situation: 'a fork', choice: 'the left one', reason: 'it was shorter', model: 'test-model' })
-    assert.equal(position.prev, self.json.hash)
+    const [decision] = fake.entries(id, 'queue')
+    assert.deepEqual({ ...decision, id: undefined, salt: undefined, prev: undefined }, { v: 1, id: undefined, record: 'queue', seq: 1, prev: undefined, salt: undefined, kind: 'decision', situation: 'a fork', choice: 'the left one', reason: 'it was shorter', model: 'test-model' })
+    const [oldDecision, position] = fake.entries(id, 'self')
+    assert.equal(oldDecision.kind, 'decision')
+    assert.equal(position.kind, 'position')
+    assert.equal(position.prev, named.json.hash)
     assert.deepEqual(fake.entries(id, 'interface')[0].about, 'a format')
   })
 
@@ -194,13 +208,19 @@ describe('the server over stdio', () => {
     for (const name of ['../x', 'A', 'a/b', '', 'x'.repeat(41)]) assert.equal((await s.call('spawn', { name, purpose: 'p' })).isError, true, name)
   })
 
+  it('exports the queue record like any other', async () => {
+    const queue = await s.call('export', { record: 'queue' })
+    assert.equal(queue.json.record, 'queue')
+    assert.equal(queue.json.entries.length, 2)
+  })
+
   it('exports one record or all of them', async () => {
     const craft = await s.call('export', { record: 'craft' })
     assert.deepEqual(Object.keys(craft.json).slice(0, 3), ['id', 'public_key', 'record'])
     assert.equal(craft.json.entries.length, 1)
     const all = await s.call('export')
     assert.deepEqual(Object.keys(all.json), ['id', 'public_key', 'heads', 'checkpoints', 'records', 'adopted'])
-    assert.deepEqual(Object.keys(all.json.records).sort(), ['craft', 'interface', 'lineage', 'runs', 'self'])
+    assert.deepEqual(Object.keys(all.json.records).sort(), ['craft', 'interface', 'lineage', 'queue', 'runs', 'self'])
     assert.equal((await s.call('export', { record: 'nonsense' })).isError, true)
   })
 

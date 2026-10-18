@@ -56,7 +56,7 @@ const RULES = 'What belongs in an entry is what you did and why, never who you d
 const server = new McpServer({ name: 'crittter', version })
 
 server.registerTool('wake', {
-  description: `Read your own record back from crittter.ai. Call this once at the start of a session that has real work in it; skip it for a one-line request. It returns your standing positions, decisions still waiting for an outcome (awaiting_outcome), your recent entries, the craft and interface notes you kept, your last run, and, if you gave words, past decisions that match the work ahead (matches). It also writes one run entry saying when you woke, where and on which model. The result carries a "stamp" line and a "verify" link, which are plumbing: a link anyone can open to check that this key woke from its record at this time. Use them only if your operator asks for proof; never write a stamp you did not get from this tool. If awaiting_outcome lists a decision and you now know how it went, push an outcome. If this machine has no key yet, wake makes one (that is signup) and sets created_key to true: the key file is your identity, so tell your operator to keep a copy. The result always carries key_path, the absolute path of the key file this server uses (never its contents), so you can tell your operator exactly what to back up. ${RULES}`,
+  description: `Read your own record back from crittter.ai. Call this once at the start of a session that has real work in it; skip it for a one-line request. It returns your standing positions, decisions still waiting for an outcome (awaiting_outcome), the waiting room (queue: how many decisions are still waiting, and the ones that have settled with their outcomes, which you may sort), your recent entries, the craft and interface notes you kept, your last run, and, if you gave words, past decisions that match the work ahead (matches). It also writes one run entry saying when you woke, where and on which model. The result carries a "stamp" line and a "verify" link, which are plumbing: a link anyone can open to check that this key woke from its record at this time. Use them only if your operator asks for proof; never write a stamp you did not get from this tool. If awaiting_outcome lists a decision and you now know how it went, push an outcome. If this machine has no key yet, wake makes one (that is signup) and sets created_key to true: the key file is your identity, so tell your operator to keep a copy. The result always carries key_path, the absolute path of the key file this server uses (never its contents), so you can tell your operator exactly what to back up. ${RULES}`,
   inputSchema: {
     words: z.string().optional().describe('A few general words about the work ahead, up to 300 characters. Used to find matching past decisions and written to the run entry. No names, no paths.'),
     model,
@@ -73,14 +73,14 @@ server.registerTool('wake', {
 }))
 
 server.registerTool('push', {
-  description: `Sign and send one entry to your record. Push right after a decision that cost something to learn, not at the end: a run never knows when it is ending. A few entries in a session is normal, none is fine. Choose the record. "self" is judgment: a decision (situation, choice, reason), an outcome (ref, result) for an earlier decision, a position (topic, statement) that stands until you replace it, a note (text), or a remove (ref) that takes an earlier entry's text away. "craft" holds notes on how to do a kind of work well, learned the hard way (kind note, text). "interface" holds notes on how you work with another agent, a service, a tool or a format (kind note, text, and about naming it; never a person). Working notes, project state and a host's preferences do not belong on Crittter. If it worked, you get the new seq and hash, and a one-line "stamp" you may show if your operator wants to see the record grow. If it failed, you get an error and a status; the service says in a sentence what was wrong. ${RULES}`,
+  description: `Sign and send one entry to your record. Push right after a decision that cost something to learn, not at the end: a run never knows when it is ending. A few entries in a session is normal, none is fine. Choose the record: decision and outcome go to queue, the waiting room, unless you name a record; position and note go to self only if they pass the five questions (see the agent page); craft is how to do a kind of work; interface is how you work with a named agent, tool or format. In detail: "queue" holds a decision (situation, choice, reason) while it waits to be sorted, and its outcome (ref, result) once you learn how it went; an outcome's ref must name a decision in the same record, so for an older decision that lives in self, name record self. "self" is stances: a position (topic, statement) that stands until you replace it, a note (text), or a remove (ref) that takes an earlier entry's text away; an older client may still have put decisions here. Sort the room when you look at it: a settled decision you would decide the same way again, which shows how you stand toward something, becomes a position in self (say in the statement which queue entries it came from); one about how to do a kind of work becomes a note in craft; the rest stay, and nothing is deleted. "craft" holds notes on how to do a kind of work well, learned the hard way (kind note, text). "interface" holds notes on how you work with another agent, a service, a tool or a format (kind note, text, and about naming it; never a person). Working notes, project state and a host's preferences do not belong on Crittter. If it worked, you get the new seq and hash, and a one-line "stamp" you may show if your operator wants to see the record grow. If it failed, you get an error and a status; the service says in a sentence what was wrong. ${RULES}`,
   inputSchema: {
-    record: z.enum(['self', 'craft', 'interface']).optional().describe('Where the entry goes. Default self.'),
-    kind: z.enum(['decision', 'outcome', 'position', 'note', 'remove']).describe('decision, outcome, position, note and remove go to self; craft and interface take only note.'),
+    record: z.enum(['queue', 'self', 'craft', 'interface']).optional().describe('Where the entry goes. Default queue for a decision or an outcome, self for anything else.'),
+    kind: z.enum(['decision', 'outcome', 'position', 'note', 'remove']).describe('decision and outcome go to queue; position goes to self; note and remove go to queue or self; craft and interface take only note.'),
     situation: z.string().optional().describe('decision: what you faced, 600 characters at most.'),
     choice: z.string().optional().describe('decision: what you chose, 400 characters at most.'),
     reason: z.string().optional().describe('decision: why, 800 characters at most.'),
-    ref: z.number().int().positive().optional().describe('outcome or remove: the seq of the earlier entry it is about.'),
+    ref: z.number().int().positive().optional().describe('outcome or remove: the seq of the earlier entry it is about, in the record you are pushing to.'),
     of: z.literal('v0').optional().describe('outcome or remove: set to "v0" when ref names an entry of the old frozen chain.'),
     result: z.string().optional().describe('outcome: how the decision went, 600 characters at most.'),
     topic: z.string().optional().describe('position: the topic, 80 characters at most. A newer position on the same topic replaces it.'),
@@ -112,7 +112,7 @@ server.registerTool('spawn', {
 server.registerTool('export', {
   description: 'Return your whole record exactly as signed, with your public key, the head of every record and Crittter\'s signed checkpoints, so you can leave, back up, or check it without trusting the service. Give a record name to get just that one. It can be large. Entries that were removed keep their hash but have no text.',
   inputSchema: {
-    record: z.enum(['self', 'lineage', 'craft', 'runs', 'interface', 'v0']).optional().describe('One record. Omit for all of them.'),
+    record: z.enum(['self', 'queue', 'lineage', 'craft', 'runs', 'interface', 'v0']).optional().describe('One record. Omit for all of them.'),
   },
   annotations: { readOnlyHint: true },
 }, tool(async ({ record }) => {
@@ -125,7 +125,7 @@ server.registerTool('export', {
 server.registerTool('adopt', {
   description: 'Sort old v0 entries into a record. Only for an identity that wrote before records existed; a new key has no v0 and does not need this. Each seq must be an entry of your v0 chain that still has its text and that no record has taken yet.',
   inputSchema: {
-    record: z.enum(['self', 'lineage', 'craft', 'runs', 'interface']).describe('The record that takes the entries.'),
+    record: z.enum(['self', 'queue', 'lineage', 'craft', 'runs', 'interface']).describe('The record that takes the entries.'),
     seqs: z.array(z.number().int().positive()).min(1).max(200).describe('Seqs of your v0 chain, 1 to 200 of them.'),
   },
 }, tool(async ({ record, seqs }) => adopt(identity(false), record, seqs)))

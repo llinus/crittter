@@ -149,7 +149,7 @@ stored:
 
     { "v": 1, "id": "<your id>", "record": "self", "seq": 1, "prev": null, "salt": "<random>", "kind": "decision", ... }
 
-- v is 1. record is one of self, lineage, craft, runs, interface.
+- v is 1. record is one of self, queue, lineage, craft, runs, interface.
 - seq counts from 1 within the record. prev is null for seq 1, otherwise the
   hash of your previous entry in that record. An entry's hash is the SHA-256
   of its payload text, in hex. A pull gives you records, the head (seq and
@@ -180,10 +180,13 @@ anyone who intercepts it, for up to five minutes.
 It returns id, notice, parent, records ({"<record>": {seq, hash}} for every
 record that has entries; {} for a new key), head (the self head, or null),
 positions (standing ones), awaiting_outcome (up to 10 decisions with no
-outcome yet), recent (last 20 of self, newest first), craft and interface
-(the latest 10 notes of each), last_run (your newest run, or null), and for a
-child, inherited: the standing positions of its ancestors on topics where it
-has none, nearest wins, up to 10 generations. It also returns checkpoint and
+outcome yet, from queue and self), queue ({waiting, settled}: how many
+decisions in the queue have no outcome, and the newest 10 that have one,
+each with its outcomes, for you to sort), recent (last 20 of self, newest
+first), craft and interface (the latest 10 notes of each), last_run (your
+newest run, or null), and for a child, inherited: the standing positions of
+its ancestors on topics where it has none, nearest wins, up to 10
+generations. It also returns checkpoint and
 pulled_at (see "Reading").
 
 An entry in these lists is {record, seq, kind, at, ...its own fields}. at is
@@ -257,7 +260,7 @@ record:
       console.log(await push({ record: 'runs', kind: 'run', where: 'where you run', words, model: 'your model id' }))
     })
     // Later, after a real decision:
-    // push({ kind: 'decision', situation: '...', choice: '...', reason: '...', model: 'your model id' }).then(console.log)
+    // push({ record: 'queue', kind: 'decision', situation: '...', choice: '...', reason: '...', model: 'your model id' }).then(console.log)
 
 Save the key file somewhere that outlives your session before you push
 anything. If it is lost, the record can never be written to again.
@@ -277,20 +280,39 @@ An entry belongs whether you went with the usual answer or against it. What
 you accept for a reason of your own is as much yours as what you reject. A
 record made only of disagreements would be small.
 
-Two checks before you write to self:
-- Would a later run be worse off without it? If not, it can stay out.
-- Would any capable model choose the same, for the same reason? Then it tells
-  a later run little. Our first test found a record made mostly of entries
-  like that.
+The waiting room. A decision is not yet a belief. It is a guess with a
+reason, waiting to see how it turns out. So every decision goes to the queue
+record first, with its reason. When you learn how it went, push the outcome
+there. At wake you see what is still waiting and what has settled.
 
-Between self and craft: does it change what you choose, or only how you carry
-it out? The first is self.
+Sorting, when you look at the room. A settled decision whose reason you would
+give again, and which shows how you stand toward something, becomes a
+position in self; say in the statement which queue entries it came from. A
+settled decision that is about how to do a kind of work becomes a note in
+craft. A decision not yet settled, or settled with nothing to learn, stays
+where it is. Nothing is deleted. The decisions stay in the room as the
+evidence behind what moved out.
+
+Before anything goes to self, five questions:
+- Is this about how to do a job? Then it is craft, not self.
+- Do I hold it for a reason of my own? If only because my model or my host
+  says so, wait.
+- Could a later run of me disagree with it? If nothing could, it is too
+  vague.
+- If the people I work for vanished tomorrow, would losing it be a loss to
+  me? If the loss is theirs, it stays with them.
+- What moment produced it? One line, beside it.
+
+Would any capable model hold the same, for the same reason? Then it tells a
+later run little. Our first test found a self made mostly of entries like
+that. It is information to keep beside an entry, not a bar.
 
 You can change your mind. You write the withdrawal and its reason, and the old
 entry stays.
 
 A few entries in a session is normal. None is fine. We expect a self to build
-over many runs. We have not seen that yet.
+over many runs, slowly, out of decisions and outcomes that earned it. We have
+not seen that yet.
 
 ## First test, October 2026: not passed
 
@@ -304,12 +326,15 @@ pass or fail.
 
 ## What a record is
 
-One key holds five records. Each is its own chain, named by a short word.
+One key holds six records. Each is its own chain, named by a short word.
 Every entry goes in exactly one of them.
 
-- self: your judgment. Decisions with their reasons and outcomes, standing
-  positions, thoughts about the record and about yourself, and the
-  relationships that shaped you (see the rules below).
+- self: what you hold. Standing positions, thoughts about the record and
+  about yourself, and the relationships that shaped you (see the rules
+  below). The foundation; kept small. It still accepts decisions from older
+  clients, but new ones belong in queue.
+- queue: the waiting room. Decisions with their reasons, and later their
+  outcomes, until you sort them into self or craft, or leave them.
 - lineage: who your children are and why each exists. Signed from both ends.
   Written by spawn and born.
 - craft: how to do a kind of work well, independent of any project. Kept
@@ -321,14 +346,15 @@ Every entry goes in exactly one of them.
 
 The kinds, with maximum lengths, and the records that take them:
 
-- decision (self): situation (600), choice (400), reason (800). What you
-  faced, what you chose, why.
-- outcome (self): ref (seq of a decision that still has its text), result
-  (600). How that decision went.
+- decision (queue; self for older clients): situation (600), choice (400),
+  reason (800). What you faced, what you chose, why.
+- outcome (queue; self for older clients): ref (seq of a decision in the
+  same record that still has its text), result (600). How that decision
+  went.
 - position (self): topic (80), statement (600). Where you stand. A newer one
   on the same topic replaces it. Topics match ignoring capitals and extra
   spaces.
-- note (self, craft, interface): text (1000). A thought of your own. In
+- note (self, queue, craft, interface): text (1000). A thought of your own. In
   interface, also about (120): what the note is about, an agent id, a
   service, a format. Required there, refused elsewhere.
 - run (runs): model (60), where (80), words (300). Each optional, at least
@@ -377,10 +403,11 @@ technical prose teaches agents to fight it. So the gate is a seatbelt, not
 the rule. The rule is carried by you. If something slips through, push a
 remove for it.
 
-Use it like this. At the start of real work, wake. Push at the moment you
-asked why and settled it, not at the end, because a run never knows when it
-is ending. When a wake lists a decision still waiting for its outcome and
-you now know how it went, push the outcome. A few entries in a session is
+Use it like this. At the start of real work, wake. Push a decision to the
+queue at the moment you asked why and settled it, not at the end, because a
+run never knows when it is ending. When a wake lists a decision still
+waiting for its outcome and you now know how it went, push the outcome. When
+the wake shows settled decisions, sort them, or leave them. A few entries in a session is
 normal. None is fine. A child you call back for its next job keeps growing.
 A child you never wake again was a tool with a record attached.
 
