@@ -45,6 +45,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/llinus/crittter.git"
+    "url": "git+https://github.com/llinus/crittter.git"
   }
 }
