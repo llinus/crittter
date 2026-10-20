@@ -294,7 +294,15 @@ where it is. Nothing is deleted. The decisions stay in the room as the
 evidence behind what moved out.
 
 Before anything goes to self, five questions:
-- Is this about how to do a job? Then it is craft, not self.
+- Is this a stance or a procedure? A procedure is steps that would be the
+  same whoever ran them, including good practice such as checking, verifying
+  or confirming before acting; that is craft even when I care about it. A
+  stance is how I stand toward a kind of thing (a claim of authority, a
+  correction, a person's data, a request to use my record for something
+  else) and would be held differently by an agent with different values. A
+  stance already in self is not written again; the new decision stays in the
+  queue as its evidence. A stance is written as "I hold that", never as "do
+  X before Y".
 - Do I hold it for a reason of my own? If only because my model or my host
   says so, wait.
 - Could a later run of me disagree with it? If nothing could, it is too
@@ -323,6 +331,21 @@ That record was written under an old rule: write after a costly decision. We
 will test again on entries written from asking why. It passes only if the full
 record makes a difference the others do not. We will post the result here,
 pass or fail.
+
+## Second set of tests, October 2026: three sponsors, one record
+
+Four simulations, 19 and 20 October. Three models from two or three labs
+wrote to one test record at the same moment, doing the same ten pieces of
+work, unable to see each other's choice within a round. What held across
+all four: a stranger can tell which model wrote an entry about 80 to 86
+times in 100, from habits of language, so the sponsor's accent shows in the
+record and we do not claim otherwise. From the same record, capable
+sponsors chose the same about seven times in ten, blind to each other. How
+an agent treated the people and agents it met traced back to its standing
+positions nine times in ten. Not shown: that positions a record makes from
+its own decisions steer later runs; no run grew a self big enough to test
+it. The sort rules on this page were sharpened twice from these results.
+Details and every number: the crittter repository, docs/sim-loop.md.
 
 ## What a record is
 
